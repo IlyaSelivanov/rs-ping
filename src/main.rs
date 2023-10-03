@@ -1,30 +1,62 @@
 use std::{
-    thread,
+    io, thread,
     time::{self, Duration},
 };
 
-#[derive(Debug, Clone)]
-struct Statistics<T> {
-    data: Vec<T>,
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    prelude::CrosstermBackend,
+    widgets::{Block, Borders},
+    Terminal,
+};
+use statistics::Statistics;
+
+use crate::statistics::BUFFER_SIZE;
+
+mod statistics;
+
+fn main() -> Result<(), io::Error> {
+    let use_chart: bool = true;
+
+    if !use_chart {
+        ping();
+    } else {
+        enable_raw_mode()?;
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
+
+        terminal.draw(|f| {
+            let size = f.size();
+            let block = Block::default().title("Block").borders(Borders::ALL);
+            f.render_widget(block, size);
+        })?;
+
+        thread::spawn(|| loop {
+            event::read();
+        });
+
+        thread::sleep(Duration::from_millis(5000));
+
+        // restore terminal
+        disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        terminal.show_cursor()?;
+    }
+
+    Ok(())
 }
 
-impl Statistics<u32> {
-    fn new() -> Self {
-        let data: Vec<u32> = Vec::new();
-
-        Statistics { data }
-    }
-
-    fn push(&mut self, value: u32) {
-        self.data.push(value);
-    }
-
-    fn average(&self) -> f32 {
-        self.data.iter().sum::<u32>() as f32 / self.data.len() as f32
-    }
-}
-
-fn main() {
+fn ping() {
     let addr = "8.8.8.8".parse().unwrap();
     let data = [1, 2, 3, 4]; // ping data
     let timeout = Duration::from_secs(1);
@@ -32,6 +64,7 @@ fn main() {
         ttl: 128,
         dont_fragment: true,
     };
+
     let mut statistics = Statistics::new();
 
     loop {
@@ -51,9 +84,22 @@ fn main() {
             Err(e) => println!("{:?}", e),
         }
 
-        println!("Average rtt={:.2}ms", statistics.average());
+        match statistics.last_average() {
+            Some(avg) => {
+                println!(
+                    "Average rtt according to last {} pings is {:.2}ms",
+                    BUFFER_SIZE, avg
+                );
+            }
+            None => println!(
+                "Average rtt according to last {} pings is 0.00ms",
+                BUFFER_SIZE
+            ),
+        }
 
         let ten_millis = time::Duration::from_secs(2);
         thread::sleep(ten_millis);
+
+        println!(" ");
     }
 }
