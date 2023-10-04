@@ -2,28 +2,25 @@ use std::{
     io,
     net::IpAddr,
     thread,
-    time::{self, Duration},
+    time::{self, Duration, Instant},
 };
 
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ping_rs::PingOptions;
-use ratatui::{
-    prelude::CrosstermBackend,
-    widgets::{Block, Borders},
-    Terminal,
-};
+use ratatui::{prelude::*, widgets::*};
 use statistics::Statistics;
 
 use crate::statistics::BUFFER_SIZE;
 
 mod statistics;
 
+#[derive(Clone)]
 struct Ping {
-    x: u32,
+    x: f64,
     addres: IpAddr,
     data: [u8; 4],
     timeout: Duration,
@@ -35,9 +32,9 @@ impl Ping {
         let addres = addr.parse().unwrap();
 
         Ping {
-            x: 0,
+            x: 0f64,
             addres,
-            data: [1,2,3,4],
+            data: [1, 2, 3, 4],
             timeout: Duration::from_secs(1),
             options: ping_rs::PingOptions {
                 ttl: 128,
@@ -46,27 +43,70 @@ impl Ping {
         }
     }
 
-    fn ping(&mut self) -> Option<(u32,u32)> {
-        let result = ping_rs::send_ping(
-            &self.addres, 
-            self.timeout, 
-            &self.data, 
-            Some(&self.options));
+    fn ping(&mut self) -> Option<(f64, f64)> {
+        let result =
+            ping_rs::send_ping(&self.addres, self.timeout, &self.data, Some(&self.options));
         match result {
             Ok(reply) => {
-                self.x += 1;
-                Some((self.x, reply.rtt))
-            },
+                self.x += 1f64;
+                Some((self.x, reply.rtt as f64))
+            }
             Err(_) => None,
         }
     }
 }
 
+struct App {
+    ping: Ping,
+    data: Vec<(f64, f64)>,
+    window: [f64; 2],
+}
+
+impl App {
+    fn new() -> App {
+        let mut ping = Ping::to_host("8.8.8.8");
+
+        let data = ping.by_ref().take(10).collect::<Vec<(f64, f64)>>();
+        App {
+            ping,
+            data,
+            window: [0.0, 20.0],
+        }
+    }
+
+    fn on_tick(&mut self) {
+        for _ in 0..5 {
+            self.data.remove(0);
+        }
+        self.data.extend(self.ping.by_ref().take(5));
+
+        self.window[0] += 1.0;
+        self.window[1] += 1.0;
+    }
+}
+
 impl Iterator for Ping {
-    type Item = (u32, u32);
+    type Item = (f64, f64);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.ping()
+        // self.ping()
+
+        let addr = "8.8.8.8".parse().unwrap();
+        let data = [1, 2, 3, 4]; // ping data
+        let timeout = Duration::from_secs(1);
+        let options = ping_rs::PingOptions {
+            ttl: 128,
+            dont_fragment: true,
+        };
+
+        let result = ping_rs::send_ping(&addr, timeout, &data, Some(&options));
+        match result {
+            Ok(reply) => {
+                self.x += 1f64;
+                Some((self.x, reply.rtt as f64))
+            },
+            Err(_) => None,
+        }
     }
 }
 
@@ -75,24 +115,20 @@ fn main() -> Result<(), io::Error> {
 
     if !use_chart {
         ping();
+
+        Ok(())
     } else {
+        // setup terminal
         enable_raw_mode()?;
         let mut stdout = io::stdout();
         execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
         let backend = CrosstermBackend::new(stdout);
         let mut terminal = Terminal::new(backend)?;
 
-        terminal.draw(|f| {
-            let size = f.size();
-            let block = Block::default().title("Block").borders(Borders::ALL);
-            f.render_widget(block, size);
-        })?;
-
-        thread::spawn(|| loop {
-            event::read();
-        });
-
-        thread::sleep(Duration::from_millis(5000));
+        // create app and run it
+        let tick_rate = Duration::from_millis(250);
+        let app = App::new();
+        let res = run_app(&mut terminal, app, tick_rate);
 
         // restore terminal
         disable_raw_mode()?;
@@ -102,9 +138,92 @@ fn main() -> Result<(), io::Error> {
             DisableMouseCapture
         )?;
         terminal.show_cursor()?;
-    }
 
-    Ok(())
+        if let Err(err) = res {
+            println!("{err:?}");
+        }
+
+        Ok(())
+    }
+}
+
+fn run_app<B: Backend>(
+    terminal: &mut Terminal<B>,
+    mut app: App,
+    tick_rate: Duration,
+) -> io::Result<()> {
+    let mut last_tick = Instant::now();
+    loop {
+        terminal.draw(|f| ui(f, &app))?;
+
+        let timeout = tick_rate
+            .checked_sub(last_tick.elapsed())
+            .unwrap_or_else(|| Duration::from_secs(0));
+        if crossterm::event::poll(timeout)? {
+            if let Event::Key(key) = event::read()? {
+                if let KeyCode::Char('q') = key.code {
+                    return Ok(());
+                }
+            }
+        }
+        if last_tick.elapsed() >= tick_rate {
+            app.on_tick();
+            last_tick = Instant::now();
+        }
+    }
+}
+
+fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
+    let size = f.size();
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ]
+            .as_ref(),
+        )
+        .split(size);
+    let x_labels = vec![
+        Span::styled(
+            format!("{}", app.window[0]),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!("{}", (app.window[0] + app.window[1]) / 2.0)),
+        Span::styled(
+            format!("{}", app.window[1]),
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+    ];
+    let datasets = vec![Dataset::default()
+        .name("data2")
+        .marker(symbols::Marker::Dot)
+        .style(Style::default().fg(Color::Cyan))
+        .data(&app.data)];
+
+    let chart = Chart::new(datasets)
+        .block(
+            Block::default()
+                .title("Chart 1".cyan().bold())
+                .borders(Borders::ALL),
+        )
+        .x_axis(
+            Axis::default()
+                .title("X Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(x_labels)
+                .bounds(app.window),
+        )
+        .y_axis(
+            Axis::default()
+                .title("Y Axis")
+                .style(Style::default().fg(Color::Gray))
+                .labels(vec!["-20".bold(), "0".into(), "20".bold()])
+                .bounds([0.0, 1000.0]),
+        );
+    f.render_widget(chart, chunks[0]);
 }
 
 fn ping() {
