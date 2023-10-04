@@ -44,8 +44,12 @@ impl Ping {
     }
 
     fn ping(&mut self) -> Option<(f64, f64)> {
-        let result =
-            ping_rs::send_ping(&self.addres, self.timeout, &self.data, Some(&self.options));
+        let result = ping_rs::send_ping(
+            &self.addres,
+            self.timeout,
+            &self.data[..4],
+            Some(&self.options),
+        );
         match result {
             Ok(reply) => {
                 self.x += 1f64;
@@ -53,6 +57,14 @@ impl Ping {
             }
             Err(_) => None,
         }
+    }
+}
+
+impl Iterator for Ping {
+    type Item = (f64, f64);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ping()
     }
 }
 
@@ -66,7 +78,7 @@ impl App {
     fn new() -> App {
         let mut ping = Ping::to_host("8.8.8.8");
 
-        let data = ping.by_ref().take(10).collect::<Vec<(f64, f64)>>();
+        let data = ping.by_ref().take(200).collect::<Vec<(f64, f64)>>();
         App {
             ping,
             data,
@@ -82,31 +94,6 @@ impl App {
 
         self.window[0] += 1.0;
         self.window[1] += 1.0;
-    }
-}
-
-impl Iterator for Ping {
-    type Item = (f64, f64);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // self.ping()
-
-        let addr = "8.8.8.8".parse().unwrap();
-        let data = [1, 2, 3, 4]; // ping data
-        let timeout = Duration::from_secs(1);
-        let options = ping_rs::PingOptions {
-            ttl: 128,
-            dont_fragment: true,
-        };
-
-        let result = ping_rs::send_ping(&addr, timeout, &data, Some(&options));
-        match result {
-            Ok(reply) => {
-                self.x += 1f64;
-                Some((self.x, reply.rtt as f64))
-            },
-            Err(_) => None,
-        }
     }
 }
 
