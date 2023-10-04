@@ -1,5 +1,7 @@
 use std::{
-    io, thread,
+    io,
+    net::IpAddr,
+    thread,
     time::{self, Duration},
 };
 
@@ -8,6 +10,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ping_rs::PingOptions;
 use ratatui::{
     prelude::CrosstermBackend,
     widgets::{Block, Borders},
@@ -18,6 +21,54 @@ use statistics::Statistics;
 use crate::statistics::BUFFER_SIZE;
 
 mod statistics;
+
+struct Ping {
+    x: u32,
+    addres: IpAddr,
+    data: [u8; 4],
+    timeout: Duration,
+    options: PingOptions,
+}
+
+impl Ping {
+    fn to_host(addr: &str) -> Self {
+        let addres = addr.parse().unwrap();
+
+        Ping {
+            x: 0,
+            addres,
+            data: [1,2,3,4],
+            timeout: Duration::from_secs(1),
+            options: ping_rs::PingOptions {
+                ttl: 128,
+                dont_fragment: true,
+            },
+        }
+    }
+
+    fn ping(&mut self) -> Option<(u32,u32)> {
+        let result = ping_rs::send_ping(
+            &self.addres, 
+            self.timeout, 
+            &self.data, 
+            Some(&self.options));
+        match result {
+            Ok(reply) => {
+                self.x += 1;
+                Some((self.x, reply.rtt))
+            },
+            Err(_) => None,
+        }
+    }
+}
+
+impl Iterator for Ping {
+    type Item = (u32, u32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.ping()
+    }
+}
 
 fn main() -> Result<(), io::Error> {
     let use_chart: bool = true;
