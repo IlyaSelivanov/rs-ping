@@ -113,7 +113,7 @@ fn main() -> Result<(), io::Error> {
         let mut terminal = Terminal::new(backend)?;
 
         // create app and run it
-        let tick_rate = Duration::from_millis(250);
+        let tick_rate = Duration::from_secs(1);
         let app = App::new();
         let res = run_app(&mut terminal, app, tick_rate);
 
@@ -166,9 +166,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
-                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 1),
             ]
             .as_ref(),
         )
@@ -188,6 +186,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         .name("data2")
         .marker(symbols::Marker::Dot)
         .style(Style::default().fg(Color::Cyan))
+        .graph_type(GraphType::Line)
         .data(&app.data)];
 
     let chart = Chart::new(datasets)
