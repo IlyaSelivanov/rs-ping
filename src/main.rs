@@ -52,7 +52,7 @@ impl Ping {
         );
         match result {
             Ok(reply) => {
-                self.x += 1f64;
+                self.x += 0.2f64;
                 Some((self.x, reply.rtt as f64))
             }
             Err(_) => None,
@@ -78,7 +78,7 @@ impl App {
     fn new() -> App {
         let mut ping = Ping::to_host("8.8.8.8");
 
-        let data = ping.by_ref().take(200).collect::<Vec<(f64, f64)>>();
+        let data = ping.by_ref().take(100).collect::<Vec<(f64, f64)>>();
         App {
             ping,
             data,
@@ -113,7 +113,7 @@ fn main() -> Result<(), io::Error> {
         let mut terminal = Terminal::new(backend)?;
 
         // create app and run it
-        let tick_rate = Duration::from_secs(1);
+        let tick_rate = Duration::from_secs(2);
         let app = App::new();
         let res = run_app(&mut terminal, app, tick_rate);
 
@@ -183,8 +183,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         ),
     ];
     let datasets = vec![Dataset::default()
-        .name("data2")
-        .marker(symbols::Marker::Dot)
+        .name("ping")
+        .marker(symbols::Marker::Braille)
         .style(Style::default().fg(Color::Cyan))
         .graph_type(GraphType::Line)
         .data(&app.data)];
@@ -192,7 +192,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let chart = Chart::new(datasets)
         .block(
             Block::default()
-                .title("Chart 1".cyan().bold())
+                .title("Chart".cyan().bold())
                 .borders(Borders::ALL),
         )
         .x_axis(
@@ -206,8 +206,8 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
             Axis::default()
                 .title("Y Axis")
                 .style(Style::default().fg(Color::Gray))
-                .labels(vec!["-20".bold(), "0".into(), "20".bold()])
-                .bounds([0.0, 1000.0]),
+                .labels(vec!["0".bold(), "500".bold()])
+                .bounds([0.0, 500.0]),
         );
     f.render_widget(chart, chunks[0]);
 }
