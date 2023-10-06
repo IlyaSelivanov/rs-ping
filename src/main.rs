@@ -3,52 +3,17 @@ use std::{
     time::{Duration, Instant},
 };
 
+use app::App;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ping::Ping;
+
 use ratatui::{prelude::*, widgets::*};
 
 mod ping;
-
-struct App {
-    ping: Ping,
-    data: Vec<(f64, f64)>,
-    window: [f64; 2],
-}
-
-impl App {
-    fn new() -> App {
-        let mut ping = Ping::to_host("8.8.8.8");
-        let mut data = Vec::<(f64, f64)>::new();
-        let mut ind = 0f64;
-
-        for _ in 0..95 {
-            data.push((ind, 0f64));
-            ind += 0.2f64;
-        }
-        ping.x = ind;
-        data.extend(ping.by_ref().take(5));
-
-        App {
-            ping,
-            data,
-            window: [0.0, 20.0],
-        }
-    }
-
-    fn on_tick(&mut self) {
-        for _ in 0..5 {
-            self.data.remove(0);
-        }
-        self.data.extend(self.ping.by_ref().take(5));
-
-        self.window[0] += 1.0;
-        self.window[1] += 1.0;
-    }
-}
+mod app;
 
 fn main() -> Result<(), io::Error> {
     // setup terminal
