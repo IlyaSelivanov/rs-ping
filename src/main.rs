@@ -50,12 +50,10 @@ impl Ping {
             &self.data[..4],
             Some(&self.options),
         );
+        self.x += 0.2f64;
         match result {
-            Ok(reply) => {
-                self.x += 0.2f64;
-                Some((self.x, reply.rtt as f64))
-            }
-            Err(_) => None,
+            Ok(reply) => Some((self.x, reply.rtt as f64)),
+            Err(_) => Some((self.x, 0f64)),
         }
     }
 }
@@ -78,7 +76,18 @@ impl App {
     fn new() -> App {
         let mut ping = Ping::to_host("8.8.8.8");
 
-        let data = ping.by_ref().take(100).collect::<Vec<(f64, f64)>>();
+        let mut data = Vec::<(f64, f64)>::new();
+
+        let mut ind = 0f64;
+        for _ in 0..95 {
+            data.push((ind, 0f64));
+            ind += 0.2f64;
+        }
+        ping.x = ind;
+        data.extend(ping.by_ref().take(5));
+
+        // let data = ping.by_ref().take(200).collect::<Vec<(f64, f64)>>();
+
         App {
             ping,
             data,
@@ -113,7 +122,7 @@ fn main() -> Result<(), io::Error> {
         let mut terminal = Terminal::new(backend)?;
 
         // create app and run it
-        let tick_rate = Duration::from_secs(2);
+        let tick_rate = Duration::from_secs(1);
         let app = App::new();
         let res = run_app(&mut terminal, app, tick_rate);
 
@@ -164,12 +173,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
     let size = f.size();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Ratio(1, 1),
-            ]
-            .as_ref(),
-        )
+        .constraints([Constraint::Ratio(1, 1)].as_ref())
         .split(size);
     let x_labels = vec![
         Span::styled(
