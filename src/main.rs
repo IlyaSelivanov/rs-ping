@@ -75,10 +75,9 @@ struct App {
 impl App {
     fn new() -> App {
         let mut ping = Ping::to_host("8.8.8.8");
-
         let mut data = Vec::<(f64, f64)>::new();
-
         let mut ind = 0f64;
+
         for _ in 0..95 {
             data.push((ind, 0f64));
             ind += 0.2f64;
