@@ -186,7 +186,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &App) {
         ),
     ];
     let datasets = vec![Dataset::default()
-        .name(format!("ping: {}", app.data[app.data.len()-1].1))
+        .name(format!("ping: {}ms", app.data[app.data.len()-1].1))
         .marker(symbols::Marker::Braille)
         .style(Style::default().fg(Color::Cyan))
         .graph_type(GraphType::Line)
